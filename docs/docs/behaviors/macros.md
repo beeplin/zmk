@@ -8,6 +8,15 @@ sidebar_label: Macros
 The macro behavior allows configuring a list of other behaviors to invoke
 when the macro is pressed and/or released.
 
+:::note
+Some things that you can do with macros can be done more easily with other behaviors.
+
+To send a single keycode with modifiers, for instance <kbd>ctrl</kbd>+<kbd>tab</kbd>, you can use the [key press behavior](key-press.md)
+with [modifier functions](../modifiers.mdx#modifier-functions).
+
+To send a string of text, you can use the [send string behavior](send-string.md).
+:::
+
 ## Macro Definition
 
 Each macro you want to use in your keymap gets defined first, then bound in your keymap.
@@ -209,8 +218,8 @@ The available parameter controls are:
 - `&macro_param_1to1` - pass the first parameter of the macro into the first parameter of the next behavior in the `bindings` list.
 - `&macro_param_1to2` - pass the first parameter of the macro into the second parameter of the next behavior in the `bindings` list.
 
-* `&macro_param_2to1` - pass the second parameter of the macro into the first parameter of the next behavior in the `bindings` list.
-* `&macro_param_2to2` - pass the second parameter of the macro into the second parameter of the next behavior in the `bindings` list.
+- `&macro_param_2to1` - pass the second parameter of the macro into the first parameter of the next behavior in the `bindings` list.
+- `&macro_param_2to2` - pass the second parameter of the macro into the second parameter of the next behavior in the `bindings` list.
 
 ## Common Patterns
 
