@@ -39,6 +39,7 @@ module.exports = {
         "features/battery",
         "features/low-power-states",
         "features/encoders",
+        "features/pointing",
         "features/displays",
         "features/backlight",
         "features/underglow",
@@ -94,6 +95,22 @@ module.exports = {
         "keymaps/combos",
         "keymaps/conditional-layers",
         "keymaps/list-of-keycodes",
+        {
+          type: "category",
+          label: "Input Processors",
+          link: {
+            type: "doc",
+            id: "keymaps/input-processors/index",
+          },
+          collapsed: true,
+          items: [
+            "keymaps/input-processors/usage",
+            "keymaps/input-processors/scaler",
+            "keymaps/input-processors/transformer",
+            "keymaps/input-processors/code-mapper",
+            "keymaps/input-processors/temp-layer",
+          ],
+        },
       ],
     },
     {
@@ -112,6 +129,7 @@ module.exports = {
         "config/combos",
         "config/displays",
         "config/encoders",
+        "config/pointing",
         "config/keymap",
         "config/layout",
         "config/kscan",
@@ -139,6 +157,7 @@ module.exports = {
             "development/hardware-integration/shift-registers",
             "development/hardware-integration/encoders",
             "development/hardware-integration/soft-off-setup",
+            "development/hardware-integration/pointing",
           ],
         },
         {
