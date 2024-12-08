@@ -22,3 +22,6 @@
 #include <behaviors/mouse_key_press.dtsi>
 #include <behaviors/soft_off.dtsi>
 #include <behaviors/studio_unlock.dtsi>
+#include <behaviors/character_map.dtsi>
+#include <behaviors/send_string.dtsi>
+#include <behaviors/report.dtsi>
