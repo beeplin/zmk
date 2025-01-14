@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 The ZMK Contributors
+ * Copyright (c) 2024 The ZMK Contributors
  *
  * SPDX-License-Identifier: MIT
  */
@@ -15,6 +15,10 @@
 #include <zmk/behavior.h>
 #include <dt-bindings/zmk/mouse.h>
 
+#if IS_ENABLED(CONFIG_ZMK_MOUSE_SMOOTH_SCROLLING)
+#include <zmk/mouse/resolution_multipliers.h>
+#endif // IS_ENABLED(CONFIG_ZMK_MOUSE_SMOOTH_SCROLLING)
+
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 struct vector2d {
@@ -25,7 +29,7 @@ struct vector2d {
 struct movement_state_1d {
     float remainder;
     int16_t speed;
-    uint64_t start_time;
+    int64_t start_time;
 };
 
 struct movement_state_2d {
@@ -65,7 +69,7 @@ static float powf(float base, float exponent) {
 #include <math.h>
 #endif
 
-static int64_t ms_since_start(int64_t start, int64_t now, int64_t delay) {
+static int64_t ticks_since_start(int64_t start, int64_t now, int64_t delay) {
     if (start == 0) {
         return 0;
     }
@@ -77,20 +81,51 @@ static int64_t ms_since_start(int64_t start, int64_t now, int64_t delay) {
     return move_duration;
 }
 
-static float speed(const struct behavior_input_two_axis_config *config, float max_speed,
-                   int64_t duration_ms) {
+#if IS_ENABLED(CONFIG_ZMK_MOUSE_SMOOTH_SCROLLING)
+
+static uint8_t get_acceleration_exponent(const struct behavior_input_two_axis_config *config,
+                                         uint16_t code) {
+    switch (code) {
+    case INPUT_REL_WHEEL:
+        return (zmk_mouse_resolution_multipliers_get_current_profile().wheel > 0)
+                   ? 0
+                   : config->acceleration_exponent;
+    case INPUT_REL_HWHEEL:
+        return (zmk_mouse_resolution_multipliers_get_current_profile().hor_wheel > 0)
+                   ? 0
+                   : config->acceleration_exponent;
+    default:
+        return config->acceleration_exponent;
+    }
+}
+
+#else
+
+static inline uint8_t get_acceleration_exponent(const struct behavior_input_two_axis_config *config,
+                                                uint16_t code) {
+    return config->acceleration_exponent;
+}
+
+#endif // IS_ENABLED(CONFIG_ZMK_MOUSE_SMOOTH_SCROLLING)
+
+static float speed(const struct behavior_input_two_axis_config *config, uint16_t code,
+                   float max_speed, int64_t duration_ticks) {
+    uint8_t accel_exp = get_acceleration_exponent(config, code);
+
+    if ((1000 * duration_ticks / CONFIG_SYS_CLOCK_TICKS_PER_SEC) > config->time_to_max_speed_ms ||
+        config->time_to_max_speed_ms == 0 || accel_exp == 0) {
+        return max_speed;
+    }
+
     // Calculate the speed based on MouseKeysAccel
     // See https://en.wikipedia.org/wiki/Mouse_keys
-    if (duration_ms == 0) {
+    if (duration_ticks == 0) {
         return 0;
     }
 
-    if (duration_ms > config->time_to_max_speed_ms || config->time_to_max_speed_ms == 0 ||
-        config->acceleration_exponent == 0) {
-        return max_speed;
-    }
-    float time_fraction = (float)duration_ms / config->time_to_max_speed_ms;
-    return max_speed * powf(time_fraction, config->acceleration_exponent);
+    float time_fraction = (float)(1000 * duration_ticks / CONFIG_SYS_CLOCK_TICKS_PER_SEC) /
+                          config->time_to_max_speed_ms;
+    return max_speed * powf(time_fraction, accel_exp);
 }
 
 static void track_remainder(float *move, float *remainder) {
@@ -99,7 +134,7 @@ static void track_remainder(float *move, float *remainder) {
     *move = (int)new_move;
 }
 
-static float update_movement_1d(const struct behavior_input_two_axis_config *config,
+static float update_movement_1d(const struct behavior_input_two_axis_config *config, uint16_t code,
                                 struct movement_state_1d *state, int64_t now) {
     float move = 0;
     if (state->speed == 0) {
@@ -107,10 +142,12 @@ static float update_movement_1d(const struct behavior_input_two_axis_config *con
         return move;
     }
 
-    int64_t move_duration = ms_since_start(state->start_time, now, config->delay_ms);
-    move = (move_duration > 0)
-               ? (speed(config, state->speed, move_duration) * config->trigger_period_ms / 1000)
-               : 0;
+    int64_t move_duration = ticks_since_start(state->start_time, now, config->delay_ms);
+    LOG_DBG("Calculated speed: %f", speed(config, code, state->speed, move_duration));
+    move =
+        (move_duration > 0)
+            ? (speed(config, code, state->speed, move_duration) * config->trigger_period_ms / 1000)
+            : 0;
 
     track_remainder(&(move), &(state->remainder));
 
@@ -121,8 +158,8 @@ static struct vector2d update_movement_2d(const struct behavior_input_two_axis_c
     struct vector2d move = {0};
 
     move = (struct vector2d){
-        .x = update_movement_1d(config, &state->x, now),
-        .y = update_movement_1d(config, &state->y, now),
+        .x = update_movement_1d(config, config->x_code, &state->x, now),
+        .y = update_movement_1d(config, config->y_code, &state->y, now),
     };
 
     return move;
@@ -145,10 +182,10 @@ static void tick_work_cb(struct k_work *work) {
     const struct device *dev = data->dev;
     const struct behavior_input_two_axis_config *cfg = dev->config;
 
-    uint64_t timestamp = k_uptime_get();
+    uint64_t timestamp = k_uptime_ticks();
 
-    LOG_INF("x start: %llu, y start: %llu, current timestamp: %llu", data->state.x.start_time,
-            data->state.y.start_time, timestamp);
+    // LOG_INF("x start: %llu, y start: %llu, current timestamp: %llu", data->state.x.start_time,
+    //         data->state.y.start_time, timestamp);
 
     struct vector2d move = update_movement_2d(cfg, &data->state, timestamp);
 
@@ -171,7 +208,7 @@ static void tick_work_cb(struct k_work *work) {
 
 static void set_start_times_for_activity_1d(struct movement_state_1d *state) {
     if (state->speed != 0 && state->start_time == 0) {
-        state->start_time = k_uptime_get();
+        state->start_time = k_uptime_ticks();
     } else if (state->speed == 0) {
         state->start_time = 0;
     }
@@ -191,6 +228,8 @@ static void update_work_scheduling(const struct device *dev) {
         k_work_schedule(&data->tick_work, K_MSEC(cfg->trigger_period_ms));
     } else {
         k_work_cancel_delayable(&data->tick_work);
+        data->state.y.remainder = 0;
+        data->state.x.remainder = 0;
     }
 }
 

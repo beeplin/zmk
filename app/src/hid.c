@@ -250,8 +250,9 @@ static inline int check_keyboard_usage(zmk_key_t usage) {
 #endif
 
 #define TOGGLE_CONSUMER(match, val)                                                                \
-    COND_CODE_1(IS_ENABLED(CONFIG_ZMK_HID_CONSUMER_REPORT_USAGES_BASIC),                           \
-                (if (val > 0xFF) { return -ENOTSUP; }), ())                                        \
+    if (val > ZMK_HID_CONSUMER_MAX_USAGE) {                                                        \
+        return -ENOTSUP;                                                                           \
+    }                                                                                              \
     for (int idx = 0; idx < CONFIG_ZMK_HID_CONSUMER_REPORT_SIZE; idx++) {                          \
         if (consumer_report.body.keys[idx] != match) {                                             \
             continue;                                                                              \
@@ -432,28 +433,30 @@ int zmk_hid_mouse_buttons_release(zmk_mouse_button_flags_t buttons) {
     return 0;
 }
 
-void zmk_hid_mouse_movement_set(int16_t x, int16_t y) {
-    mouse_report.body.d_x = x;
-    mouse_report.body.d_y = y;
+void zmk_hid_mouse_movement_set(int16_t hwheel, int16_t wheel) {
+    mouse_report.body.d_x = hwheel;
+    mouse_report.body.d_y = wheel;
     LOG_DBG("Mouse movement set to %d/%d", mouse_report.body.d_x, mouse_report.body.d_y);
 }
 
-void zmk_hid_mouse_movement_update(int16_t x, int16_t y) {
-    mouse_report.body.d_x += x;
-    mouse_report.body.d_y += y;
+void zmk_hid_mouse_movement_update(int16_t hwheel, int16_t wheel) {
+    mouse_report.body.d_x += hwheel;
+    mouse_report.body.d_y += wheel;
     LOG_DBG("Mouse movement updated to %d/%d", mouse_report.body.d_x, mouse_report.body.d_y);
 }
 
-void zmk_hid_mouse_scroll_set(int8_t x, int8_t y) {
-    mouse_report.body.d_scroll_x = x;
-    mouse_report.body.d_scroll_y = y;
+void zmk_hid_mouse_scroll_set(int8_t hwheel, int8_t wheel) {
+    mouse_report.body.d_scroll_x = hwheel;
+    mouse_report.body.d_scroll_y = wheel;
+
     LOG_DBG("Mouse scroll set to %d/%d", mouse_report.body.d_scroll_x,
             mouse_report.body.d_scroll_y);
 }
 
-void zmk_hid_mouse_scroll_update(int8_t x, int8_t y) {
-    mouse_report.body.d_scroll_x += x;
-    mouse_report.body.d_scroll_y += y;
+void zmk_hid_mouse_scroll_update(int8_t hwheel, int8_t wheel) {
+    mouse_report.body.d_scroll_x += hwheel;
+    mouse_report.body.d_scroll_y += wheel;
+
     LOG_DBG("Mouse scroll updated to X: %d/%d", mouse_report.body.d_scroll_x,
             mouse_report.body.d_scroll_y);
 }
@@ -465,18 +468,12 @@ void zmk_hid_mouse_clear(void) {
 
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
 
-struct zmk_hid_keyboard_report *zmk_hid_get_keyboard_report(void) {
-    return &keyboard_report;
-}
+struct zmk_hid_keyboard_report *zmk_hid_get_keyboard_report(void) { return &keyboard_report; }
 
-struct zmk_hid_consumer_report *zmk_hid_get_consumer_report(void) {
-    return &consumer_report;
-}
+struct zmk_hid_consumer_report *zmk_hid_get_consumer_report(void) { return &consumer_report; }
 
 #if IS_ENABLED(CONFIG_ZMK_MOUSE)
 
-struct zmk_hid_mouse_report *zmk_hid_get_mouse_report(void) {
-    return &mouse_report;
-}
+struct zmk_hid_mouse_report *zmk_hid_get_mouse_report(void) { return &mouse_report; }
 
 #endif // IS_ENABLED(CONFIG_ZMK_MOUSE)
